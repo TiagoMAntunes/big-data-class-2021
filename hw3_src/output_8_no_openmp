@@ -1,0 +1,24 @@
+1 int use_time : 424 us [MPI_Reduce]
+1 int use_time : 96 us [YOUR_Reduce]
+CORRECT !
+16 int use_time : 283 us [MPI_Reduce]
+16 int use_time : 163 us [YOUR_Reduce]
+CORRECT !
+256 int use_time : 99 us [MPI_Reduce]
+256 int use_time : 145 us [YOUR_Reduce]
+CORRECT !
+4096 int use_time : 2042 us [MPI_Reduce]
+4096 int use_time : 1115 us [YOUR_Reduce]
+CORRECT !
+65536 int use_time : 10163 us [MPI_Reduce]
+65536 int use_time : 14505 us [YOUR_Reduce]
+CORRECT !
+1048576 int use_time : 37199 us [MPI_Reduce]
+1048576 int use_time : 100395 us [YOUR_Reduce]
+CORRECT !
+16777216 int use_time : 594722 us [MPI_Reduce]
+16777216 int use_time : 857843 us [YOUR_Reduce]
+CORRECT !
+268435456 int use_time : 9365042 us [MPI_Reduce]
+268435456 int use_time : 10969555 us [YOUR_Reduce]
+CORRECT !

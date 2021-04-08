@@ -1,0 +1,36 @@
+268435456 int use_time : 17093118 us [MPI_Reduce]
+268435456 int use_time : 5309462 us [YOUR_Reduce]
+CORRECT !
+268435456 int use_time : 19277489 us [MPI_Reduce]
+268435456 int use_time : 4421012 us [YOUR_Reduce]
+CORRECT !
+268435456 int use_time : 22970538 us [MPI_Reduce]
+268435456 int use_time : 4009951 us [YOUR_Reduce]
+CORRECT !
+268435456 int use_time : 23736010 us [MPI_Reduce]
+268435456 int use_time : 3889484 us [YOUR_Reduce]
+CORRECT !
+268435456 int use_time : 7464361 us [MPI_Reduce]
+268435456 int use_time : 8066572 us [YOUR_Reduce]
+CORRECT !
+268435456 int use_time : 8162025 us [MPI_Reduce]
+268435456 int use_time : 6922015 us [YOUR_Reduce]
+CORRECT !
+268435456 int use_time : 7021238 us [MPI_Reduce]
+268435456 int use_time : 5963343 us [YOUR_Reduce]
+CORRECT !
+268435456 int use_time : 7409169 us [MPI_Reduce]
+268435456 int use_time : 5715381 us [YOUR_Reduce]
+CORRECT !
+268435456 int use_time : 7789613 us [MPI_Reduce]
+268435456 int use_time : 10931560 us [YOUR_Reduce]
+CORRECT !
+268435456 int use_time : 7554857 us [MPI_Reduce]
+268435456 int use_time : 9258366 us [YOUR_Reduce]
+CORRECT !
+268435456 int use_time : 6940470 us [MPI_Reduce]
+268435456 int use_time : 8942405 us [YOUR_Reduce]
+CORRECT !
+268435456 int use_time : 6542540 us [MPI_Reduce]
+268435456 int use_time : 9153612 us [YOUR_Reduce]
+CORRECT !

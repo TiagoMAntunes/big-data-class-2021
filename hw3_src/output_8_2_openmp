@@ -1,0 +1,6 @@
+16777216 int use_time : 512703 us [MPI_Reduce]
+16777216 int use_time : 627904 us [YOUR_Reduce]
+CORRECT !
+268435456 int use_time : 8728196 us [MPI_Reduce]
+268435456 int use_time : 8826472 us [YOUR_Reduce]
+CORRECT !
