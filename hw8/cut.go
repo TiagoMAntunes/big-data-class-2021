@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -9,7 +10,7 @@ import (
 )
 
 type Edge struct {
-	src, dst int32
+	src, dst uint32
 }
 
 func main() {
@@ -44,28 +45,25 @@ func main() {
 		os.Exit(4)
 	}
 
-	// FIXME do I really need 1024
-	next := make(chan int32, 1024)
+	next := make(chan uint32, 1024)
 	go func() {
-		for {
-			var source, dest int32
-			err = binary.Read(fd, binary.LittleEndian, &source)
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				fmt.Printf("Error reading souce vertex: %v\n", err.Error())
-				os.Exit(4)
-			}
+		r := bufio.NewReader(fd)
+		var buf [1024]byte
+		stop := false
+		for !stop {
+			amount, err := io.ReadFull(r, buf[:])
 
-			err = binary.Read(fd, binary.LittleEndian, &dest)
 			if err != nil {
-				// no EOF check here, all sources must have a vertex
-				fmt.Printf("Error reading dest vertex: %v\n", err.Error())
-				os.Exit(4)
+				if err != io.EOF && err != io.ErrUnexpectedEOF {
+					panic(err)
+				}
+				stop = true
 			}
 
-			next <- source
-			next <- dest
+			for i := 0; i < amount/4; i++ {
+				next <- binary.LittleEndian.Uint32(buf[i*4 : (i+1)*4])
+			}
+
 		}
 		close(next)
 	}()
