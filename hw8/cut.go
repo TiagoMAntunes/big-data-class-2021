@@ -249,6 +249,19 @@ func greedy(nMachines int, next chan uint32) {
 }
 
 func hybrid(nMachines int, next chan uint32) {
+	args := os.Args
+	var threshold int
+	if len(args) < 5 {
+		threshold = 3
+	} else {
+		v, err := strconv.Atoi(args[4])
+		if err != nil || v < 0 {
+			panic("Threshold is not a valid number! Input a positive integer.")
+		}
+		threshold = v
+	}
+	fmt.Printf("Running with threshold %v\n", threshold)
+
 	partitions := make([]Partition, nMachines)
 	for i := range partitions {
 		partitions[i].edgeCount = 0
@@ -256,7 +269,6 @@ func hybrid(nMachines int, next chan uint32) {
 		partitions[i].master = make(map[uint32]bool)
 	}
 
-	const threshold = 13 // same as paper
 	count := make(map[uint32][]uint32)
 	highDegree := make(map[uint32]bool)
 
