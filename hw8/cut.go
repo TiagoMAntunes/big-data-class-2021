@@ -18,6 +18,17 @@ type Partition struct {
 	mirror, master             map[uint32]bool
 }
 
+func getReplicationFactor(partitions []Partition) float32 {
+	nNodes := 0
+	totalNodes := 0
+	for _, v := range partitions {
+		nNodes += len(v.master)
+		totalNodes += len(v.master) + len(v.mirror)
+	}
+
+	return float32(totalNodes) / float32(nNodes)
+}
+
 func edge(nMachines int, next chan uint32) {
 	partitions := make([]Partition, nMachines)
 	for i := range partitions {
@@ -62,6 +73,7 @@ func edge(nMachines int, next chan uint32) {
 		fmt.Printf("Partition %v\n%v\n%v\n%v\n%v\n\n", i, len(partitions[i].master), len(partitions[i].master)+len(partitions[i].mirror), partitions[i].mirrorEdgeCount, partitions[i].edgeCount)
 		// fmt.Printf("%v %v\n", partitions[i].master, partitions[i].mirror)
 	}
+	fmt.Printf("Replication factor: %v\n", getReplicationFactor(partitions))
 }
 
 func vertex(nMachines int, next chan uint32) {
@@ -108,6 +120,7 @@ func vertex(nMachines int, next chan uint32) {
 		fmt.Printf("Partition %v\n%v\n%v\n%v\n\n", i, len(partitions[i].master), len(partitions[i].master)+len(partitions[i].mirror), partitions[i].edgeCount)
 		// fmt.Printf("%v %v\n", partitions[i].master, partitions[i].mirror)
 	}
+	fmt.Printf("Replication factor: %v\n", getReplicationFactor(partitions))
 }
 
 func greedy(nMachines int, next chan uint32) {
@@ -120,6 +133,8 @@ func greedy(nMachines int, next chan uint32) {
 
 	src_machines := make([]bool, nMachines)
 	dst_machines := make([]bool, nMachines)
+
+	vertices := make(map[uint32]uint32)
 
 	for {
 		for i := range src_machines {
@@ -135,38 +150,29 @@ func greedy(nMachines int, next chan uint32) {
 
 		// get machines where vertex is replicated
 		for i, v := range partitions {
-			_, src_ok1 := v.master[src]
+			// _, src_ok1 := v.master[src]
 			_, src_ok2 := v.mirror[src]
-			if src_ok1 || src_ok2 {
+			if src_ok2 {
 				src_machines[i] = true
 			}
 
-			_, dst_ok1 := v.master[dst]
+			// _, dst_ok1 := v.master[dst]
 			_, dst_ok2 := v.mirror[dst]
-			if dst_ok1 || dst_ok2 {
+			if dst_ok2 {
 				dst_machines[i] = true
 			}
 
 		}
 
-		// Case 1: if there is an intersection, use it
-		machine := -1
-		for i := range partitions {
+		// find intersection
+		intersect := false
+		src_status := false // if empty
+		dst_status := false // if empty
+		for i := 0; i < nMachines; i++ {
 			if src_machines[i] && dst_machines[i] {
-				// found it
-				machine = i
-				break
+				intersect = true
 			}
-		}
 
-		if machine != -1 {
-			// use it
-		}
-
-		// check assigned vertices
-		src_status := false
-		dst_status := false
-		for i := 0; i < nMachines && !(src_status && dst_status); i++ {
 			if src_machines[i] {
 				src_status = true
 			}
@@ -174,28 +180,64 @@ func greedy(nMachines int, next chan uint32) {
 			if dst_machines[i] {
 				dst_status = true
 			}
+
 		}
+
+		var cond func(i int) bool
 
 		switch {
-		case src_status && dst_status:
-			// Case 2: if no intersection, get machine with the least edgeCount
-			var leastCount uint32 = ^uint32(0)
-			least := -1
-			for i := 0; i < nMachines; i++ {
-				if (src_machines[i] || dst_machines[i]) && partitions[i].edgeCount < int(leastCount) {
-					leastCount = uint32(partitions[i].edgeCount)
-					least = i
-				}
+		case intersect:
+			// case 1
+			cond = func(i int) bool {
+				return src_machines[i] && dst_machines[i]
 			}
-
-			least = least
 		case src_status || dst_status:
-			// Case 3: if only one vertice has been assigned, use that machine
-
+			// case 2 && 3
+			cond = func(i int) bool {
+				return src_machines[i] || dst_machines[i]
+			}
 		default:
-			// Case 4: no vertex was assigned, use machine with the least edgeCount
+			// case 4
+			cond = func(i int) bool {
+				return true
+			}
+		}
+		var leastCount uint32 = ^uint32(0)
+		machine := -1
+		for i := 0; i < nMachines; i++ {
+			if cond(i) && partitions[i].edgeCount < int(leastCount) {
+				leastCount = uint32(partitions[i].edgeCount)
+				machine = i
+			}
 		}
 
+		// count increase
+		partitions[machine].edgeCount++
+
+		if _, ok := vertices[src]; !ok {
+			vertices[src] = uint32(machine)
+		}
+
+		if _, ok := vertices[dst]; !ok {
+			vertices[dst] = uint32(machine)
+		}
+
+		// remove them from being mirrors later
+		partitions[machine].mirror[src] = true
+		partitions[machine].mirror[dst] = true
+	}
+
+	for key := range vertices {
+		partitions[vertices[key]].master[key] = true
+		delete(partitions[vertices[key]].mirror, key)
+	}
+
+	for _, v := range partitions {
+		for key := range v.master {
+			if _, ok := v.mirror[key]; ok {
+				panic(fmt.Sprintf("Found both master and mirror %v", key))
+			}
+		}
 	}
 
 	// output
@@ -203,6 +245,92 @@ func greedy(nMachines int, next chan uint32) {
 		fmt.Printf("Partition %v\n%v\n%v\n%v\n\n", i, len(partitions[i].master), len(partitions[i].master)+len(partitions[i].mirror), partitions[i].edgeCount)
 		// fmt.Printf("%v %v\n", partitions[i].master, partitions[i].mirror)
 	}
+	fmt.Printf("Replication factor: %v\n", getReplicationFactor(partitions))
+}
+
+func hybrid(nMachines int, next chan uint32) {
+	partitions := make([]Partition, nMachines)
+	for i := range partitions {
+		partitions[i].edgeCount = 0
+		partitions[i].mirror = make(map[uint32]bool)
+		partitions[i].master = make(map[uint32]bool)
+	}
+
+	const threshold = 13 // same as paper
+	count := make(map[uint32][]uint32)
+	highDegree := make(map[uint32]bool)
+
+	for {
+		src, more := <-next
+		if !more {
+			break
+		}
+		dst := <-next
+		// fmt.Printf("(%v,%v)\n", src, dst)
+		// high degree vertex just do the source part
+		if _, ok := highDegree[dst]; ok {
+			// add vertice to source instead
+			index := src % uint32(nMachines)
+			partitions[index].master[src] = true
+			partitions[index].mirror[dst] = true
+			partitions[index].edgeCount++
+
+		} else {
+			// either don't know enough or is a low vertice
+			// edge gets placed in index of target
+			index := dst % uint32(nMachines)
+
+			partitions[index].edgeCount++
+			partitions[index].master[dst] = true
+
+			partitions[src%uint32(nMachines)].master[src] = true
+
+			// handle high order vertices
+			if _, ok := count[dst]; !ok {
+				count[dst] = make([]uint32, 0)
+			}
+
+			count[dst] = append(count[dst], src)
+
+			if len(count[dst]) > threshold {
+				// fmt.Printf("Vertex %v is high degree\n", dst)
+				// become a high degree vertice
+				highDegree[dst] = true
+
+				// move edges into other machines
+				partitions[index].edgeCount = partitions[index].edgeCount - len(count[dst])
+				for _, src := range count[dst] {
+					new_index := src % uint32(nMachines)
+					partitions[new_index].edgeCount++
+
+					partitions[new_index].master[src] = true
+					if new_index != index {
+						partitions[new_index].mirror[dst] = true
+					}
+				}
+
+				delete(count, dst)
+			}
+		}
+
+	}
+
+	// need to add missing mirrors from low degree vertices
+	for dst, srcs := range count {
+		index := dst % uint32(nMachines)
+		for _, src := range srcs {
+			if src%uint32(nMachines) != index {
+				partitions[index].mirror[src] = true
+			}
+		}
+	}
+	fmt.Printf("High degree: %v\n", len(highDegree))
+	// output
+	for i := 0; i < nMachines; i++ {
+		fmt.Printf("Partition %v\n%v\n%v\n%v\n\n", i, len(partitions[i].master), len(partitions[i].master)+len(partitions[i].mirror), partitions[i].edgeCount)
+		// fmt.Printf("%v %v\n", partitions[i].master, partitions[i].mirror)
+	}
+	fmt.Printf("Replication factor: %v\n", getReplicationFactor(partitions))
 }
 
 func main() {
@@ -256,6 +384,7 @@ func main() {
 	case "vertex":
 		function = vertex
 	case "hybrid":
+		function = hybrid
 	case "greedy":
 		function = greedy
 	default:
@@ -264,18 +393,5 @@ func main() {
 	}
 
 	function(nMachines, next)
-
-	// vertices := []Edge(nil)
-	// for {
-	// 	v1, more := <-next
-	// 	if !more {
-	// 		break
-	// 	}
-	// 	v2 := <-next
-	// 	// fmt.Printf("Pair: %v, %v\n", v1, v2)
-	// 	vertices = append(vertices, Edge{v1, v2})
-	// }
-
-	// fmt.Printf("All done! Number of vertices: %v\n", len(vertices))
 
 }
