@@ -3,9 +3,12 @@ package main
 import (
 	"bufio"
 	"encoding/binary"
+	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"runtime/pprof"
 	"strconv"
 )
 
@@ -14,8 +17,8 @@ type Edge struct {
 }
 
 type Partition struct {
-	edgeCount, mirrorEdgeCount int
-	mirror, master             map[uint32]bool
+	edgeCount, mirrorEdgeCount, masterCount, mirrorCount int
+	mirror, master                                       map[uint32]bool
 }
 
 func getReplicationFactor(partitions []Partition) float32 {
@@ -24,6 +27,13 @@ func getReplicationFactor(partitions []Partition) float32 {
 	for _, v := range partitions {
 		nNodes += len(v.master)
 		totalNodes += len(v.master) + len(v.mirror)
+	}
+
+	if totalNodes == 0 {
+		for _, v := range partitions {
+			nNodes += v.masterCount
+			totalNodes += v.masterCount + v.mirrorCount
+		}
 	}
 
 	return float32(totalNodes) / float32(nNodes)
@@ -84,6 +94,8 @@ func vertex(nMachines int, next chan uint32) {
 		partitions[i].master = make(map[uint32]bool)
 	}
 
+	replicated := make(map[uint32][]bool, nMachines)
+
 	counter := 0 // keeps track of the current edge index
 	for {
 		src, more := <-next
@@ -101,23 +113,39 @@ func vertex(nMachines int, next chan uint32) {
 
 		i1 := src % uint32(nMachines)
 		i2 := dst % uint32(nMachines)
-		// a vertex is a master in its own hash ALWAYS
-		partitions[i1].master[src] = true
-		partitions[i2].master[dst] = true
 
-		// a vertex is a mirror in this edge hash if it's not its own hash
-		if int(i1) != index {
-			partitions[index].mirror[src] = true
+		src_machines, ok := replicated[src]
+		if !ok {
+			src_machines = make([]bool, nMachines)
+			replicated[src] = src_machines
 		}
 
-		if int(i2) != index {
-			partitions[index].mirror[dst] = true
+		dst_machines, ok := replicated[dst]
+		if !ok {
+			dst_machines = make([]bool, nMachines)
+			replicated[dst] = dst_machines
+		}
+
+		src_machines[i1] = true
+		src_machines[index] = true
+		dst_machines[i2] = true
+		dst_machines[index] = true
+	}
+
+	for i, machines := range replicated {
+		index := i % uint32(nMachines)
+		partitions[index].masterCount++
+		for m, v := range machines {
+			if v && m != int(index) {
+				partitions[m].mirrorCount++
+			}
 		}
 	}
 
 	// output
 	for i := 0; i < nMachines; i++ {
-		fmt.Printf("Partition %v\n%v\n%v\n%v\n\n", i, len(partitions[i].master), len(partitions[i].master)+len(partitions[i].mirror), partitions[i].edgeCount)
+
+		fmt.Printf("Partition %v\n%v\n%v\n%v\n\n", i, partitions[i].masterCount, partitions[i].masterCount+partitions[i].mirrorCount, partitions[i].edgeCount)
 		// fmt.Printf("%v %v\n", partitions[i].master, partitions[i].mirror)
 	}
 	fmt.Printf("Replication factor: %v\n", getReplicationFactor(partitions))
@@ -134,6 +162,9 @@ func greedy(nMachines int, next chan uint32) {
 	src_machines := make([]bool, nMachines)
 	dst_machines := make([]bool, nMachines)
 
+	// highly efficient array of bools
+	replicated := make(map[uint32][]bool)
+
 	vertices := make(map[uint32]uint32)
 
 	for {
@@ -149,19 +180,17 @@ func greedy(nMachines int, next chan uint32) {
 		dst := <-next
 
 		// get machines where vertex is replicated
-		for i, v := range partitions {
-			// _, src_ok1 := v.master[src]
-			_, src_ok2 := v.mirror[src]
-			if src_ok2 {
-				src_machines[i] = true
-			}
+		src_machines, ok := replicated[src]
+		if !ok {
+			src_machines = make([]bool, nMachines)
+			replicated[src] = src_machines
 
-			// _, dst_ok1 := v.master[dst]
-			_, dst_ok2 := v.mirror[dst]
-			if dst_ok2 {
-				dst_machines[i] = true
-			}
+		}
 
+		dst_machines, ok := replicated[dst]
+		if !ok {
+			dst_machines = make([]bool, nMachines)
+			replicated[dst] = dst_machines
 		}
 
 		// find intersection
@@ -225,6 +254,23 @@ func greedy(nMachines int, next chan uint32) {
 		// remove them from being mirrors later
 		partitions[machine].mirror[src] = true
 		partitions[machine].mirror[dst] = true
+
+		if v, ok := replicated[src]; ok {
+			v[machine] = true
+		} else {
+			arr := make([]bool, nMachines)
+			arr[machine] = true
+			replicated[src] = arr
+		}
+
+		if v, ok := replicated[dst]; ok {
+			v[machine] = true
+		} else {
+			arr := make([]bool, nMachines)
+			arr[machine] = true
+			replicated[dst] = arr
+		}
+
 	}
 
 	for key := range vertices {
@@ -345,8 +391,16 @@ func hybrid(nMachines int, next chan uint32) {
 	fmt.Printf("Replication factor: %v\n", getReplicationFactor(partitions))
 }
 
+// var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+var memprofile = flag.String("memprofile", "", "write memory profile to this file")
+
 func main() {
 	args := os.Args
+	flag.Parse()
+
+	if *memprofile != "" {
+		args = args[1:]
+	}
 
 	if len(args) < 4 {
 		fmt.Printf("Usage: %v <edge|vertex|hybrid|greedy> <#machines> <filename>\n", args[0])
@@ -405,5 +459,13 @@ func main() {
 	}
 
 	function(nMachines, next)
-
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.WriteHeapProfile(f)
+		f.Close()
+		return
+	}
 }
