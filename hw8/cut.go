@@ -69,12 +69,14 @@ func edge(nMachines int, next chan uint32) {
 			// mirrors and replicated edges
 			partitions[i1].mirror[dst] = true
 			partitions[i1].mirrorEdgeCount++
-
+			// fmt.Printf("%v %v -> %v\n", src, dst, i1)
 			partitions[i2].mirror[src] = true
 			partitions[i2].mirrorEdgeCount++
+			// fmt.Printf("%v %v -> %v\n", src, dst, i2)
 		} else {
 			// both are masters, avoid duplicated edge count
 			partitions[i1].edgeCount--
+			// fmt.Printf("%v %v -> %v\n", src, dst, i1)
 		}
 	}
 
@@ -110,7 +112,7 @@ func vertex(nMachines int, next chan uint32) {
 
 		// count increase
 		partitions[index].edgeCount++
-
+		// fmt.Printf("%v %v -> %v\n", src, dst, index)
 		i1 := src % uint32(nMachines)
 		i2 := dst % uint32(nMachines)
 
@@ -130,8 +132,10 @@ func vertex(nMachines int, next chan uint32) {
 		src_machines[index] = true
 		dst_machines[i2] = true
 		dst_machines[index] = true
+
 	}
 
+	// fmt.Printf("%v\n", replicated)
 	for i, machines := range replicated {
 		index := i % uint32(nMachines)
 		partitions[index].masterCount++
@@ -159,19 +163,12 @@ func greedy(nMachines int, next chan uint32) {
 		partitions[i].master = make(map[uint32]bool)
 	}
 
-	src_machines := make([]bool, nMachines)
-	dst_machines := make([]bool, nMachines)
-
 	// highly efficient array of bools
 	replicated := make(map[uint32][]bool)
 
 	vertices := make(map[uint32]uint32)
 
 	for {
-		for i := range src_machines {
-			src_machines[i] = false
-			dst_machines[i] = false
-		}
 
 		src, more := <-next
 		if !more {
@@ -332,6 +329,7 @@ func hybrid(nMachines int, next chan uint32) {
 			partitions[index].master[src] = true
 			partitions[index].mirror[dst] = true
 			partitions[index].edgeCount++
+			// fmt.Printf("%v %v -> %v\n", src, dst, index)
 
 		} else {
 			// either don't know enough or is a low vertice
@@ -340,7 +338,7 @@ func hybrid(nMachines int, next chan uint32) {
 
 			partitions[index].edgeCount++
 			partitions[index].master[dst] = true
-
+			// fmt.Printf("%v %v -> %v\n", src, dst, index)
 			partitions[src%uint32(nMachines)].master[src] = true
 
 			// handle high order vertices
@@ -354,13 +352,13 @@ func hybrid(nMachines int, next chan uint32) {
 				// fmt.Printf("Vertex %v is high degree\n", dst)
 				// become a high degree vertice
 				highDegree[dst] = true
-
+				// fmt.Printf("Redo %v\n", dst)
 				// move edges into other machines
 				partitions[index].edgeCount = partitions[index].edgeCount - len(count[dst])
 				for _, src := range count[dst] {
 					new_index := src % uint32(nMachines)
 					partitions[new_index].edgeCount++
-
+					// fmt.Printf("%v %v -> %v\n", src, dst, new_index)
 					partitions[new_index].master[src] = true
 					if new_index != index {
 						partitions[new_index].mirror[dst] = true
@@ -373,6 +371,7 @@ func hybrid(nMachines int, next chan uint32) {
 
 	}
 
+	// fmt.Printf("%v\n", count)
 	// need to add missing mirrors from low degree vertices
 	for dst, srcs := range count {
 		index := dst % uint32(nMachines)
