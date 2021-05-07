@@ -50,7 +50,7 @@ int main(int argc, char ** argv) {
 	graph.hint(pagerank, sum);
 	graph.stream_vertices<VertexId>(
 		[&](VertexId i){
-			pagerank[i] = 1.f / degree[i];
+			pagerank[i] = 1.f / graph.vertices;
 			sum[i] = 0;
 			return 0;
 		}, nullptr, 0,
@@ -71,7 +71,7 @@ int main(int argc, char ** argv) {
 		graph.stream_edges<VertexId>(
 			[&](Edge & e){
 				auto val = pagerank[e.source] / degree[e.source];
-				if (val)
+				if (val > threshold)
 					write_add(&sum[e.target], val); // sum delta(B) / L(B)
 				return 0;
 			}, nullptr, 0, 1,
@@ -85,22 +85,37 @@ int main(int argc, char ** argv) {
 		graph.hint(pagerank, sum);
 
 		// apply
-		graph.stream_vertices<VertexId>(
-			[&](VertexId i){
-				pagerank[i] = 0.85f * sum[i];
+		graph.stream_vertices<float>(
+			[&](VertexId i) {
+				pagerank[i] += 0.85* sum[i];
+				sum[i] = 0;
 				return 0;
 			}, nullptr, 0,
 			[&](std::pair<VertexId,VertexId> vid_range){
 				pagerank.load(vid_range.first, vid_range.second);
+				sum.load(vid_range.first, vid_range.second);
 			},
 			[&](std::pair<VertexId,VertexId> vid_range){
 				pagerank.save();
+				sum.save();
 			}
 		);
-		
 	}
+
+
+	int max_index = 0;
+	float max_value = -1;
+	graph.stream_vertices<VertexId>(
+		[&](VertexId i) {
+			if (pagerank[i] > max_value) {
+				max_index = i;
+				max_value = pagerank[i];
+			}
+			return 0;
+		}
+	);
 
 	double end_time = get_time();
 	printf("%d iterations of pagerank took %.2f seconds\n", iterations, end_time - begin_time);
-
+	printf("Max: %0.5f %d\n", max_value, max_index);
 }
