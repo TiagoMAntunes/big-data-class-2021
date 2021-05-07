@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
 
     if (argc < 4)
     {
-        printf("Usage: %s [path] [iterations] [threshold]", argv[0]);
+        printf("Usage: %s [path] [iterations] [threshold]\n", argv[0]);
         exit(-1);
     }
 
