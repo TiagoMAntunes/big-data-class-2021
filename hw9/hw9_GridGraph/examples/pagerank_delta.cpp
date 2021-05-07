@@ -23,7 +23,7 @@ int main(int argc, char ** argv) {
 	}
 	std::string path = argv[1];
 	int iterations = atoi(argv[2]);
-    int threshold = atoi(argv[3]);
+    float threshold = std::stof(argv[3]);
 	long memory_bytes = (argc>=5)?atol(argv[4])*1024l*1024l*1024l:8l*1024l*1024l*1024l;
 
 	Graph graph(path);
@@ -117,5 +117,5 @@ int main(int argc, char ** argv) {
 
 	double end_time = get_time();
 	printf("%d iterations of pagerank took %.2f seconds\n", iterations, end_time - begin_time);
-	printf("Max: %0.5f %d\n", max_value, max_index);
+	printf("Max: %0.20f %d\n", max_value, max_index);
 }
