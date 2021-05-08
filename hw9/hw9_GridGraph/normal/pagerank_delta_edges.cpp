@@ -20,6 +20,10 @@ inline double get_time() {
 
 typedef int VertexId;
 
+typedef struct {
+    VertexId src, dst;
+} Edge;
+
 int main(int argc, char *argv[])
 {
 
@@ -33,7 +37,8 @@ int main(int argc, char *argv[])
     int iterations = atoi(argv[2]);
     float threshold = std::stof(argv[3]);
 
-    std::vector<std::vector<VertexId>> edges(VERTEX_COUNT, std::vector<VertexId>());
+    // std::vector<std::vector<VertexId>> edges(VERTEX_COUNT, std::vector<VertexId>());
+    std::vector<Edge> edges;
 
     std::vector<float> pagerank(VERTEX_COUNT);
     std::vector<float> sum(VERTEX_COUNT);
@@ -44,10 +49,11 @@ int main(int argc, char *argv[])
     std::fill(sum.begin(), sum.end(), 0);
     std::fill(degree.begin(), degree.end(), 0);
     std::fill(delta.begin(), delta.end(), 1);
-    
+
     printf("Going to load graph. First element has value %0.20f, should be %0.20f\n", pagerank[0], 1.f / VERTEX_COUNT);
     FILE *fin = fopen(argv[1], "rb");
     
+    Edge e;
     while (true)
     {
         VertexId src, dst;
@@ -55,7 +61,9 @@ int main(int argc, char *argv[])
             break;
         if (fread(&dst, sizeof(dst), 1, fin) == 0)
             break;
-        edges[src].push_back(dst);
+        e.src = src;
+        e.dst = dst;
+        edges.push_back(e);
         degree[src]++;
     }
     fclose(fin);
@@ -67,13 +75,12 @@ int main(int argc, char *argv[])
     for (int iter = 0; iter < iterations; iter++) {
 
         //scatter
-        #pragma omp parallel for schedule(guided) 
-        for (int src = 0; src < VERTEX_COUNT; src++) { 
+        #pragma omp parallel for schedule(static) 
+        for (size_t i = 0; i < edges.size(); i++) {
+            VertexId src = edges[i].src;
+            VertexId dst = edges[i].dst;
             auto val = delta[src] / degree[src];
-            if (val <= threshold)
-                continue;
-
-            for (VertexId dst : edges[src]) {
+            if (val > threshold) {
                 #pragma omp atomic update
                 sum[dst] += val;
             }
